@@ -1,0 +1,240 @@
+
+đây là định dạng của chuẩn của file import super proxy hãy đọc cấu trúc của nó
+
+Cần bạn cung cấp nội dung mẫu của file (hoặc ít nhất vài dòng) thì mới phân tích chính xác được cấu trúc “chuẩn import Super Proxy”.
+
+Hiện tại chưa có dữ liệu cụ thể nên chưa thể xác định:
+
+delimiter (, : |…)
+
+thứ tự field (IP, Port, User, Pass…)
+
+có header hay không
+
+format đặc biệt (JSON / CSV / TXT custom)
+
+Bạn gửi 1 trong các dạng sau:
+
+5–10 dòng mẫu file
+
+hoặc screenshot nội dung
+
+hoặc mô tả tool “Super Proxy” cụ thể (vì có nhiều tool trùng tên)
+
+Sau đó sẽ phân tích chi tiết:
+
+format chuẩn
+
+mapping field
+
+validate rule
+
+cách generate file bằng C# (.NET) nếu cần
+
+
+# superproxy:proxylist:v1
+http://proxymart29271:PHagsIIn@160.187.170.147:29271 "ipv4proxy2"
+http://proxymart29057:ULuJRzdw@160.191.16.57:29057 "ipv4proxy3"
+http://proxymart49130:mgSUpPty@160.250.54.6:49130 "proxy1" *
+http://proxymart49797:UILdMlsy@160.250.54.9:49797 "proxy2"
+http://proxymart49383:LyKJOmBM@160.250.54.7:49383 "proxy3"
+http://proxymart49995:WRvIusnM@160.250.54.6:49995 "proxy4"
+http://proxymart49127:OMJPjdjt@160.250.54.4:49127 "proxy5"
+http://proxymart29572:UQXzaSqM@161.248.213.124:29572 "proxyv4.10.27.02.26"
+http://proxymart29384:pgqhPqVE@163.223.6.241:29384 "v4.11.27.02.26"
+http://proxymart29104:TFqmCDpQ@163.61.71.104:29104 "v4.12.27.02.26"
+http://proxymart29060:hhoXXVyP@163.61.70.60:29060 "v4.13.27.02.26"
+http://proxymart29123:xtbCYIdZ@163.223.7.123:29123 "v4.14.27.02.26"
+http://proxymart29376:xtICVuPg@160.191.16.22:29376 "v4proxy1" dns:cloudflare
+http://proxymart29459:VXQYiZWH@163.223.7.252:29459 "v4proxy4 6.1.25"
+http://proxymart29170:bqrarlFx@161.248.180.170:29170 "v4proxy5 6.1.25"
+http://proxymart29685:ScNClbpa@161.248.212.193:29685 "v4proxy6 6.1.25"
+
+Đây là format custom text (không phải CSV/JSON) của Super Proxy. Phân tích chi tiết như sau:
+
+1. Header (dòng đầu)
+# superproxy:proxylist:v1
+# → comment / metadata
+
+superproxy:proxylist:v1 → version format
+
+Tool sẽ dùng dòng này để xác định kiểu import
+
+2. Cấu trúc mỗi dòng proxy
+Format tổng quát:
+protocol://username:password@ip:port "name" [options]
+3. Phân tích từng phần
+Ví dụ:
+
+http://proxymart29271:PHagsIIn@160.187.170.147:29271 "ipv4proxy2"
+Các thành phần:
+Phần	Giá trị	Ý nghĩa
+protocol	http	loại proxy (http / https / socks5...)
+username	proxymart29271	user auth
+password	PHagsIIn	password
+ip	160.187.170.147	IP proxy
+port	29271	port
+name	"ipv4proxy2"	tên hiển thị trong tool
+4. Các option bổ sung (optional)
+a. Proxy mặc định (active)
+... "proxy1" *
+* → đánh dấu proxy active / default
+
+b. DNS config
+... "v4proxy1" dns:cloudflare
+dns:cloudflare → cấu hình DNS riêng
+
+Có thể có:
+
+dns:system
+
+dns:google
+
+dns:cloudflare
+
+c. Name có space
+"v4proxy4 6.1.25"
+Name luôn nằm trong " " nên có thể chứa khoảng trắng
+
+5. Regex parse đề xuất
+Nếu parse bằng C#:
+
+var pattern = @"^(?<protocol>\w+):\/\/(?<user>[^:]+):(?<pass>[^@]+)@(?<ip>[^:]+):(?<port>\d+)\s+""(?<name>[^""]+)""\s*(?<options>.*)?$";
+6. Class mapping C#
+public class ProxyItem
+{
+    public string Protocol { get; set; }
+    public string Username { get; set; }
+    public string Password { get; set; }
+    public string IP { get; set; }
+    public int Port { get; set; }
+    public string Name { get; set; }
+    public bool IsDefault { get; set; }
+    public string Dns { get; set; }
+}
+7. Logic parse option
+if (options.Contains("*"))
+    proxy.IsDefault = true;
+
+var dnsMatch = Regex.Match(options, @"dns:(\w+)");
+if (dnsMatch.Success)
+    proxy.Dns = dnsMatch.Groups[1].Value;
+8. Generate file đúng chuẩn
+Ví dụ build lại:
+
+string line = $"{p.Protocol}://{p.Username}:{p.Password}@{p.IP}:{p.Port} \"{p.Name}\"";
+
+if (p.IsDefault)
+    line += " *";
+
+if (!string.IsNullOrEmpty(p.Dns))
+    line += $" dns:{p.Dns}";
+9. Lưu ý quan trọng
+Encoding: UTF-8 (không BOM là an toàn nhất)
+
+Mỗi proxy = 1 dòng
+
+Không có dấu , hay ;
+
+Name bắt buộc có dấu "
+
+Options nằm cuối dòng, cách bằng space
+
+10. Tổng kết
+Format này thực chất là:
+
+URI proxy chuẩn (RFC-like) + metadata phía sau
+
+Dễ parse bằng Regex hoặc string split
+
+Nếu cần:
+
+Convert từ list IP:PORT sang format này
+
+Export từ DB → file import
+
+hoặc build tool nuôi proxy bằng .NET
+
+có thể yêu cầu thêm để viết code hoàn chỉnh.
+
+
+209.38.173.242:31112:zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-XRfjNWv4 209.38.173.242:31112:zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-69hybuSo 209.38.173.242:31112:zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-Slzl2pf5 209.38.173.242:31112:zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-Fk5H9sox 209.38.173.242:31112:zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-Sjlyj5jA hãy tạo file với định dạng giống với nội dung văn bản này
+
+Dữ liệu bạn đưa vào đang ở dạng:
+
+ip:port:username:password
+Cần convert sang format Super Proxy:
+
+http://username:password@ip:port "name"
+Kết quả convert đúng chuẩn file import
+# superproxy:proxylist:v1
+http://zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-XRfjNWv4@209.38.173.242:31112 "proxy1"
+http://zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-69hybuSo@209.38.173.242:31112 "proxy2"
+http://zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-Slzl2pf5@209.38.173.242:31112 "proxy3"
+http://zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-Fk5H9sox@209.38.173.242:31112 "proxy4"
+http://zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-Sjlyj5jA@209.38.173.242:31112 "proxy5"
+Logic convert
+Mapping:
+
+209.38.173.242:31112:USER:PASS
+→ http://USER:PASS@209.38.173.242:31112 "name"
+Code C# tự động generate (chuẩn .NET)
+using System;
+using System.IO;
+using System.Linq;
+
+class Program
+{
+    static void Main()
+    {
+        var input = @"209.38.173.242:31112:zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-XRfjNWv4
+209.38.173.242:31112:zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-69hybuSo
+209.38.173.242:31112:zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-Slzl2pf5
+209.38.173.242:31112:zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-Fk5H9sox
+209.38.173.242:31112:zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-Sjlyj5jA";
+
+        var lines = input.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+
+        var output = lines
+            .Select((line, index) =>
+            {
+                var parts = line.Split(':');
+                var ip = parts[0];
+                var port = parts[1];
+                var user = parts[2];
+                var pass = parts[3];
+
+                return $"http://{user}:{pass}@{ip}:{port} \"proxy{index + 1}\"";
+            });
+
+        var result = "# superproxy:proxylist:v1\n" + string.Join("\n", output);
+
+        File.WriteAllText("proxy.txt", result);
+
+        Console.WriteLine("Done!");
+    }
+}
+Lưu ý
+Nếu input của bạn là 1 dòng dài (cách nhau bằng space) → cần .Split(' ')
+
+Nếu nhiều IP khác nhau → code vẫn dùng được
+
+Có thể thêm:
+
+* → proxy mặc định
+
+dns:cloudflare
+
+Nếu bạn cần:
+
+import hàng nghìn proxy
+
+random name / group / tag
+
+hoặc tích hợp vào tool nuôi Zalo
+
+có thể viết thêm tool chuẩn cho bạn.
+
+tôi có 1 loại input khác nữa tools cần nhận diện và thích nghi chuyển đổi cho nhiều định dạng
+định dạng 2 
+proxymart29366:ygHRrKyO@161.248.212.20:29366
