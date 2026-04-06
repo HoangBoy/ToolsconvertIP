@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260406-1">
+  <link rel="stylesheet" href="style.css?v=20260406-3">
 </head>
 <body>
   <div class="bg-orb orb-a"></div>
@@ -45,11 +45,47 @@
           <input type="checkbox" id="keepNames" checked>
           Giữ tên có sẵn nếu input đã có \"name\"
         </label>
+        <label>
+          <input type="checkbox" id="autoSaveHistory" checked>
+          Tự lưu lịch sử sau mỗi lần convert
+        </label>
+      </div>
+
+      <div class="meta-grid">
+        <div>
+          <label for="tagInput">Tag phân loại</label>
+          <input id="tagInput" type="text" placeholder="Ví dụ: vps-vn, client-a, chiến dịch-tháng-4">
+        </div>
+        <div>
+          <label for="noteInput">Ghi chú</label>
+          <input id="noteInput" type="text" placeholder="Ghi chú thêm cho lần convert này">
+        </div>
+      </div>
+
+      <div class="meta-grid">
+        <div>
+          <label for="accountTypeInput">Loại tài khoản / login</label>
+          <input id="accountTypeInput" type="text" placeholder="Ví dụ: zalo, tiktok, ads, accountA">
+        </div>
+        <div>
+          <label for="nameTemplateInput">Template tên proxy</label>
+          <input id="nameTemplateInput" type="text" value="{account}-{date}-proxy{index}" placeholder="Ví dụ: {account}-{date}-proxy{index}">
+          <div class="helper">Token: {index} {date} {datetime} {tag} {account} {source}</div>
+        </div>
+      </div>
+
+      <div class="options">
+        <label>
+          <input type="checkbox" id="useTemplateName" checked>
+          Dùng template tên cho output
+        </label>
       </div>
 
       <div class="actions">
         <button id="convertBtn" class="btn primary">Convert</button>
         <button id="clearBtn" class="btn">Xóa</button>
+        <button id="pasteInputBtn" class="btn">Paste Input</button>
+        <button id="copyInputBtn" class="btn">Copy Input</button>
         <button id="copyBtn" class="btn">Copy Output</button>
         <button id="downloadBtn" class="btn">Tải file .txt</button>
       </div>
@@ -63,8 +99,59 @@
       </div>
       <textarea id="output" readonly placeholder="# superproxy:proxylist:v1"></textarea>
     </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Lịch sử convert</h2>
+      </div>
+
+      <div class="history-tools">
+        <input id="historySearch" type="text" placeholder="Tìm theo tag, note, format, tên..."></input>
+        <input id="dateFrom" type="date">
+        <input id="dateTo" type="date">
+        <button id="clearHistoryBtn" class="btn">Xóa toàn bộ lịch sử local</button>
+        <button id="exportHistoryBtn" class="btn">Tải lịch sử JSON</button>
+      </div>
+
+      <div id="historyStats" class="stats">Lịch sử local: 0 bản ghi.</div>
+      <div id="historyList" class="history-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Cloud Sync đa thiết bị</h2>
+      </div>
+
+      <p class="cloud-note">
+        Đồng bộ chung lịch sử giữa máy tính và điện thoại bằng một mã kho. Không cần đăng nhập tài khoản.
+      </p>
+
+      <div class="meta-grid">
+        <div>
+          <label for="syncKeyInput">Mã kho đồng bộ</label>
+          <input id="syncKeyInput" type="text" value="hoangboy-default" placeholder="Ví dụ: hoangboy-private-key-01">
+        </div>
+        <div>
+          <label for="autoCloudSync">Tùy chọn</label>
+          <label class="inline-check">
+            <input type="checkbox" id="autoCloudSync">
+            Tự đẩy cloud sau mỗi lần convert
+          </label>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="pushCloudBtn" class="btn primary">Đẩy lịch sử lên cloud</button>
+        <button id="pullCloudBtn" class="btn">Tải lịch sử từ cloud</button>
+      </div>
+
+      <div id="cloudStatus" class="stats">Cloud: chưa cấu hình.</div>
+    </section>
   </main>
 
-  <script src="app.js?v=20260406-1"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js?v=20260406-3"></script>
+  <script src="app.js?v=20260406-3"></script>
 </body>
 </html>

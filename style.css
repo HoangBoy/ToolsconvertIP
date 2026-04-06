@@ -121,9 +121,19 @@ body {
 }
 
 select,
+input,
 textarea,
 button {
   font-family: inherit;
+}
+
+input {
+  width: 100%;
+  border: 1px solid rgba(34, 34, 34, 0.2);
+  border-radius: 10px;
+  padding: 10px 11px;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 textarea {
@@ -139,6 +149,7 @@ textarea {
 }
 
 textarea:focus,
+input:focus,
 select:focus {
   outline: 2px solid rgba(216, 95, 35, 0.35);
   border-color: rgba(216, 95, 35, 0.35);
@@ -155,6 +166,39 @@ select {
   margin-top: 10px;
   color: var(--muted);
   font-size: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.meta-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.meta-grid label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.helper {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.inline-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline-check input {
+  width: auto;
 }
 
 .actions {
@@ -192,6 +236,64 @@ select {
   color: var(--muted);
 }
 
+.history-tools {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr auto auto;
+  gap: 8px;
+}
+
+.history-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.history-item {
+  border: 1px solid rgba(34, 34, 34, 0.18);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.history-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.history-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.badge {
+  background: #fff4e8;
+  border: 1px solid #f2b283;
+  color: #934015;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.history-note {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 4px 0 8px;
+}
+
+.history-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cloud-note {
+  margin: 0;
+  color: var(--muted);
+}
+
 @keyframes riseIn {
   from {
     opacity: 0;
@@ -223,6 +325,14 @@ select {
   .panel {
     border-radius: 14px;
     padding: 14px;
+  }
+
+  .meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .history-tools {
+    grid-template-columns: 1fr;
   }
 
   textarea {
