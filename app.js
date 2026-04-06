@@ -181,6 +181,24 @@ function persistHistory() {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(historyRecords.slice(0, HISTORY_LIMIT)));
 }
 
+function downloadTextFile(content, fileName) {
+  const text = content || "";
+  if (!text.trim()) {
+    statsEl.textContent = "No data to download.";
+    return;
+  }
+
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function buildProxyName(parsedItem, index) {
   const sourceName = parsedItem.sourceName || "";
 
@@ -246,6 +264,8 @@ function renderHistory() {
         <div class="history-note">${safeHtml(item.formatSummary || "")}</div>
         <div class="history-actions">
           <button class="btn" data-action="load" data-id="${safeHtml(item.id)}">Load output</button>
+          <button class="btn" data-action="download-input" data-id="${safeHtml(item.id)}">Download input</button>
+          <button class="btn" data-action="download-output" data-id="${safeHtml(item.id)}">Download output</button>
           <button class="btn" data-action="delete" data-id="${safeHtml(item.id)}">Delete record</button>
         </div>
       </article>
@@ -372,9 +392,7 @@ function convert() {
     statsEl.textContent += " Saved to local history.";
   }
 
-  if (autoCloudSyncEl.checked) {
-    pushCloud();
-  }
+  pushCloud();
 }
 
 function clearAll() {
@@ -421,20 +439,7 @@ async function pasteInput() {
 }
 
 function downloadOutput() {
-  if (!outputEl.value.trim()) {
-    statsEl.textContent = "No output to download.";
-    return;
-  }
-
-  const blob = new Blob([outputEl.value], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `superproxy-import-${yyyymmddHHmmss()}.txt`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  downloadTextFile(outputEl.value, `superproxy-import-${yyyymmddHHmmss()}.txt`);
   statsEl.textContent = "Output file downloaded.";
 }
 
@@ -497,6 +502,18 @@ function initHistoryEvents() {
       return;
     }
 
+    if (action === "download-input") {
+      downloadTextFile(item.input || "", `history-input-${item.createdAt.slice(0, 19).replace(/[\-:T]/g, "")}.txt`);
+      statsEl.textContent = "History input file downloaded.";
+      return;
+    }
+
+    if (action === "download-output") {
+      downloadTextFile(item.output || "", `history-output-${item.createdAt.slice(0, 19).replace(/[\-:T]/g, "")}.txt`);
+      statsEl.textContent = "History output file downloaded.";
+      return;
+    }
+
     if (action === "delete") {
       historyRecords = historyRecords.filter((x) => x.id !== id);
       persistHistory();
@@ -543,6 +560,8 @@ function bootstrap() {
   initHistoryEvents();
   renderHistory();
   initFirebase();
+
+  autoCloudSyncEl.checked = true;
 
   inputEl.value = [
     "209.38.173.242:31112:zp5911_9ujlob:Upfep1ALtLklKGs9_country-Vietnam_session-XRfjNWv4",
