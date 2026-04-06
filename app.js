@@ -3,8 +3,10 @@ const HISTORY_LIMIT = 1000;
 
 const inputEl = document.getElementById("input");
 const outputEl = document.getElementById("output");
+const outputTitleEl = document.getElementById("outputTitle");
 const statsEl = document.getElementById("stats");
 const protocolEl = document.getElementById("protocol");
+const outputFormatEl = document.getElementById("outputFormat");
 const keepNamesEl = document.getElementById("keepNames");
 const autoSaveHistoryEl = document.getElementById("autoSaveHistory");
 const tagInputEl = document.getElementById("tagInput");
@@ -107,8 +109,11 @@ function parseOne(text) {
     return null;
   }
 
-  const fullRegex = /^(?:(https?|socks5):\/\/)?([^:\s@]+):([^@\s]+)@([^:\s]+):(\d{2,5})(?:\s+"([^"]+)")?(?:\s+\*)?(?:\s+dns:[\w-]+)?$/i;
+  const fullRegex = /^(?:(https?|socks4?|socks5):\/\/)?([^:\s@]+):([^@\s]+)@([^:\s]+):(\d{2,5})(?:\s+"([^"]+)")?(?:\s+\*)?(?:\s+dns:[\w-]+)?$/i;
   const ipPortUserPassRegex = /^([^:\s]+):(\d{2,5}):([^:\s@]+):([^\s]+)$/;
+  const protocolHostPortRegex = /^(https?|socks4?|socks5):\/\/([^:\s]+):(\d{2,5})$/i;
+  const protocolHostPortUserPassRegex = /^(https?|socks4?|socks5):\/\/([^:\s]+):(\d{2,5}):([^:\s@]+):([^\s]+)$/i;
+  const hostPortRegex = /^([^:\s]+):(\d{2,5})$/;
 
   let m = line.match(fullRegex);
   if (m) {
@@ -138,7 +143,102 @@ function parseOne(text) {
     };
   }
 
+  m = line.match(protocolHostPortUserPassRegex);
+  if (m) {
+    const [, protocol, host, port, user, pass] = m;
+    return {
+      protocol: protocol.toLowerCase(),
+      user,
+      pass,
+      host,
+      port,
+      sourceName: null,
+      format: "protocol://ip:port:user:pass"
+    };
+  }
+
+  m = line.match(protocolHostPortRegex);
+  if (m) {
+    const [, protocol, host, port] = m;
+    return {
+      protocol: protocol.toLowerCase(),
+      user: null,
+      pass: null,
+      host,
+      port,
+      sourceName: null,
+      format: "protocol://ip:port"
+    };
+  }
+
+  m = line.match(hostPortRegex);
+  if (m) {
+    const [, host, port] = m;
+    return {
+      protocol: protocolEl.value.toLowerCase(),
+      user: null,
+      pass: null,
+      host,
+      port,
+      sourceName: null,
+      format: "ip:port"
+    };
+  }
+
   return null;
+}
+
+function normalizeGenloginProtocol(protocol) {
+  const p = (protocol || "http").toLowerCase();
+  if (p === "socks") {
+    return "socks5";
+  }
+
+  if (["http", "https", "socks4", "socks5"].includes(p)) {
+    return p;
+  }
+
+  return "http";
+}
+
+function currentOutputFormat() {
+  return outputFormatEl.value === "genlogin" ? "genlogin" : "superproxy";
+}
+
+function updateOutputUi() {
+  const format = currentOutputFormat();
+  if (format === "genlogin") {
+    outputTitleEl.textContent = "Output format Genlogin";
+    outputEl.placeholder = "http://192.168.1.1:3000:admin:admin";
+    return;
+  }
+
+  outputTitleEl.textContent = "Output chuan Super Proxy";
+  outputEl.placeholder = "# superproxy:proxylist:v1";
+}
+
+function buildSuperproxyOutput(parsedItems) {
+  const lines = ["# superproxy:proxylist:v1"];
+  parsedItems.forEach((p, i) => {
+    const name = buildProxyName(p, i + 1);
+    if (p.user && p.pass) {
+      lines.push(`${p.protocol}://${p.user}:${p.pass}@${p.host}:${p.port} "${name}"`);
+      return;
+    }
+
+    lines.push(`${p.protocol}://${p.host}:${p.port} "${name}"`);
+  });
+  return lines.join("\n");
+}
+
+function buildGenloginOutput(parsedItems) {
+  return parsedItems.map((p) => {
+    const protocol = normalizeGenloginProtocol(p.protocol || protocolEl.value);
+    if (p.user && p.pass) {
+      return `${protocol}://${p.host}:${p.port}:${p.user}:${p.pass}`;
+    }
+    return `${protocol}://${p.host}:${p.port}`;
+  }).join("\n");
 }
 
 function explodeCandidates(raw) {
@@ -256,6 +356,7 @@ function renderHistory() {
             <span class="badge">valid: ${safeHtml(item.validCount)}</span>
             <span class="badge">failed: ${safeHtml(item.failedCount)}</span>
             <span class="badge">protocol: ${safeHtml(item.protocol)}</span>
+            <span class="badge">output: ${safeHtml(item.outputFormat || "superproxy")}</span>
             ${item.tag ? `<span class="badge">tag: ${safeHtml(item.tag)}</span>` : ""}
             ${item.accountType ? `<span class="badge">account: ${safeHtml(item.accountType)}</span>` : ""}
           </div>
@@ -286,7 +387,8 @@ function saveConvertRecord(snapshot) {
     tag: (tagInputEl.value || "").trim(),
     note: (noteInputEl.value || "").trim(),
     accountType: (accountTypeInputEl.value || "").trim(),
-    nameTemplate: (nameTemplateInputEl.value || "").trim()
+    nameTemplate: (nameTemplateInputEl.value || "").trim(),
+    outputFormat: snapshot.outputFormat || "superproxy"
   };
 
   historyRecords.unshift(entry);
@@ -366,13 +468,8 @@ function convert() {
     formatCount.set(parsedItem.format, (formatCount.get(parsedItem.format) || 0) + 1);
   }
 
-  const lines = ["# superproxy:proxylist:v1"];
-  parsed.forEach((p, i) => {
-    const name = buildProxyName(p, i + 1);
-    lines.push(`${p.protocol}://${p.user}:${p.pass}@${p.host}:${p.port} "${name}"`);
-  });
-
-  outputEl.value = lines.join("\n");
+  const outputFormat = currentOutputFormat();
+  outputEl.value = outputFormat === "genlogin" ? buildGenloginOutput(parsed) : buildSuperproxyOutput(parsed);
 
   const formatSummary = [...formatCount.entries()]
     .map(([k, v]) => `${k}: ${v}`)
@@ -387,7 +484,8 @@ function convert() {
       protocol: protocolEl.value,
       validCount: parsed.length,
       failedCount: failed.length,
-      formatSummary
+      formatSummary,
+      outputFormat
     });
     statsEl.textContent += " Saved to local history.";
   }
@@ -439,7 +537,8 @@ async function pasteInput() {
 }
 
 function downloadOutput() {
-  downloadTextFile(outputEl.value, `superproxy-import-${yyyymmddHHmmss()}.txt`);
+  const prefix = currentOutputFormat() === "genlogin" ? "genlogin-export" : "superproxy-import";
+  downloadTextFile(outputEl.value, `${prefix}-${yyyymmddHHmmss()}.txt`);
   statsEl.textContent = "Output file downloaded.";
 }
 
@@ -498,6 +597,8 @@ function initHistoryEvents() {
       noteInputEl.value = item.note || "";
       accountTypeInputEl.value = item.accountType || "";
       nameTemplateInputEl.value = item.nameTemplate || nameTemplateInputEl.value;
+      outputFormatEl.value = item.outputFormat || "superproxy";
+      updateOutputUi();
       statsEl.textContent = `Loaded record ${formatDate(item.createdAt)}.`;
       return;
     }
@@ -547,6 +648,7 @@ function initFirebase() {
 function initMainEvents() {
   convertBtn.addEventListener("click", convert);
   clearBtn.addEventListener("click", clearAll);
+  outputFormatEl.addEventListener("change", updateOutputUi);
   pasteInputBtn.addEventListener("click", pasteInput);
   copyInputBtn.addEventListener("click", copyInput);
   copyBtn.addEventListener("click", copyOutput);
@@ -560,6 +662,7 @@ function bootstrap() {
   initHistoryEvents();
   renderHistory();
   initFirebase();
+  updateOutputUi();
 
   autoCloudSyncEl.checked = true;
 
