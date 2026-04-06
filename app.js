@@ -1,5 +1,7 @@
 const HISTORY_KEY = "spc_history_v1";
 const HISTORY_LIMIT = 1000;
+const HISTORY_PAGE_SIZE = 10;
+const CLOUD_DELETE_PASSWORD = "@1@2@3";
 
 const inputEl = document.getElementById("input");
 const outputEl = document.getElementById("output");
@@ -29,14 +31,17 @@ const clearHistoryBtn = document.getElementById("clearHistoryBtn");
 const exportHistoryBtn = document.getElementById("exportHistoryBtn");
 const historyStatsEl = document.getElementById("historyStats");
 const historyListEl = document.getElementById("historyList");
+const historyPaginationEl = document.getElementById("historyPagination");
 
 const syncKeyInputEl = document.getElementById("syncKeyInput");
 const autoCloudSyncEl = document.getElementById("autoCloudSync");
 const cloudStatusEl = document.getElementById("cloudStatus");
 const pushCloudBtn = document.getElementById("pushCloudBtn");
 const pullCloudBtn = document.getElementById("pullCloudBtn");
+const deleteCloudBtn = document.getElementById("deleteCloudBtn");
 
 let historyRecords = loadHistory();
+let currentHistoryPage = 1;
 let firebaseReady = false;
 let firebaseDb = null;
 
@@ -340,14 +345,23 @@ function renderHistory() {
     return queryPass && fromPass && toPass;
   });
 
-  historyStatsEl.textContent = `Local history: ${historyRecords.length} records. Showing: ${filtered.length}.`;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / HISTORY_PAGE_SIZE));
+  if (currentHistoryPage > totalPages) {
+    currentHistoryPage = totalPages;
+  }
 
-  if (!filtered.length) {
+  const start = (currentHistoryPage - 1) * HISTORY_PAGE_SIZE;
+  const pagedItems = filtered.slice(start, start + HISTORY_PAGE_SIZE);
+
+  historyStatsEl.textContent = `Local history: ${historyRecords.length} records. Showing: ${filtered.length}. Page ${currentHistoryPage}/${totalPages}.`;
+
+  if (!pagedItems.length) {
     historyListEl.innerHTML = '<div class="history-item">No matching history records.</div>';
+    renderHistoryPagination(totalPages);
     return;
   }
 
-  historyListEl.innerHTML = filtered.map((item) => {
+  historyListEl.innerHTML = pagedItems.map((item) => {
     return `
       <article class="history-item" data-id="${safeHtml(item.id)}">
         <div class="history-item-head">
@@ -372,6 +386,24 @@ function renderHistory() {
       </article>
     `;
   }).join("");
+
+  renderHistoryPagination(totalPages);
+}
+
+function renderHistoryPagination(totalPages) {
+  if (totalPages <= 1) {
+    historyPaginationEl.innerHTML = "";
+    return;
+  }
+
+  const items = [];
+  items.push('<button class="btn" data-page="prev">Prev</button>');
+  for (let i = 1; i <= totalPages; i += 1) {
+    const styleClass = i === currentHistoryPage ? "btn primary" : "btn";
+    items.push(`<button class="${styleClass}" data-page="${i}">${i}</button>`);
+  }
+  items.push('<button class="btn" data-page="next">Next</button>');
+  historyPaginationEl.innerHTML = items.join("");
 }
 
 function saveConvertRecord(snapshot) {
@@ -406,16 +438,53 @@ async function pushCloud() {
   const syncKey = cleanDocId(syncKeyInputEl.value);
 
   try {
-    await firebaseDb.collection("proxy_history_shared").doc(syncKey).set({
+    const docRef = firebaseDb.collection("proxy_history_shared").doc(syncKey);
+    const existing = await docRef.get();
+    const cloudItems = existing.exists && Array.isArray((existing.data() || {}).items)
+      ? existing.data().items
+      : [];
+
+    const mergedItems = mergeHistoryItems(cloudItems, historyRecords);
+    historyRecords = mergedItems;
+    persistHistory();
+    renderHistory();
+
+    await docRef.set({
       updatedAt: window.firebase.firestore.FieldValue.serverTimestamp(),
       syncKey,
-      items: historyRecords.slice(0, HISTORY_LIMIT)
+      items: mergedItems.slice(0, HISTORY_LIMIT)
     });
 
-    setCloudStatus(`pushed ${historyRecords.length} records with key ${syncKey}.`);
+    setCloudStatus(`pushed merged ${mergedItems.length} records with key ${syncKey}.`);
   } catch (error) {
     setCloudStatus(`push failed: ${error.message}`);
   }
+}
+
+function mergeHistoryItems(cloudItems, localItems) {
+  const map = new Map();
+  const allItems = [...cloudItems, ...localItems];
+
+  for (const item of allItems) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+
+    const id = item.id || idValue();
+    const prev = map.get(id);
+    if (!prev) {
+      map.set(id, { ...item, id });
+      continue;
+    }
+
+    const prevTime = Date.parse(prev.createdAt || "") || 0;
+    const currentTime = Date.parse(item.createdAt || "") || 0;
+    map.set(id, currentTime >= prevTime ? { ...item, id } : prev);
+  }
+
+  return [...map.values()]
+    .sort((a, b) => (Date.parse(b.createdAt || "") || 0) - (Date.parse(a.createdAt || "") || 0))
+    .slice(0, HISTORY_LIMIT);
 }
 
 async function pullCloud() {
@@ -437,10 +506,37 @@ async function pullCloud() {
     const cloudItems = Array.isArray(data.items) ? data.items : [];
     historyRecords = cloudItems.slice(0, HISTORY_LIMIT);
     persistHistory();
+    currentHistoryPage = 1;
     renderHistory();
     setCloudStatus(`pulled ${historyRecords.length} records with key ${syncKey}.`);
   } catch (error) {
     setCloudStatus(`pull failed: ${error.message}`);
+  }
+}
+
+async function deleteCloudData() {
+  if (!firebaseReady) {
+    setCloudStatus("not ready. Please configure Firebase first.");
+    return;
+  }
+
+  const password = window.prompt("Enter password to delete cloud data:", "");
+  if (password !== CLOUD_DELETE_PASSWORD) {
+    setCloudStatus("cloud delete blocked: wrong password.");
+    return;
+  }
+
+  const syncKey = cleanDocId(syncKeyInputEl.value);
+  const ok = window.confirm(`Delete cloud data for key ${syncKey}? This cannot be undone.`);
+  if (!ok) {
+    return;
+  }
+
+  try {
+    await firebaseDb.collection("proxy_history_shared").doc(syncKey).delete();
+    setCloudStatus(`cloud data deleted for key ${syncKey}.`);
+  } catch (error) {
+    setCloudStatus(`cloud delete failed: ${error.message}`);
   }
 }
 
@@ -555,9 +651,18 @@ function exportHistoryJson() {
 }
 
 function initHistoryEvents() {
-  historySearchEl.addEventListener("input", renderHistory);
-  dateFromEl.addEventListener("change", renderHistory);
-  dateToEl.addEventListener("change", renderHistory);
+  historySearchEl.addEventListener("input", () => {
+    currentHistoryPage = 1;
+    renderHistory();
+  });
+  dateFromEl.addEventListener("change", () => {
+    currentHistoryPage = 1;
+    renderHistory();
+  });
+  dateToEl.addEventListener("change", () => {
+    currentHistoryPage = 1;
+    renderHistory();
+  });
 
   clearHistoryBtn.addEventListener("click", () => {
     const ok = window.confirm("Delete all local history records?");
@@ -567,11 +672,42 @@ function initHistoryEvents() {
 
     historyRecords = [];
     persistHistory();
+    currentHistoryPage = 1;
     renderHistory();
     statsEl.textContent = "All local history records deleted.";
   });
 
   exportHistoryBtn.addEventListener("click", exportHistoryJson);
+
+  historyPaginationEl.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    const page = target.dataset.page;
+    if (!page) {
+      return;
+    }
+
+    if (page === "prev") {
+      currentHistoryPage = Math.max(1, currentHistoryPage - 1);
+      renderHistory();
+      return;
+    }
+
+    if (page === "next") {
+      currentHistoryPage += 1;
+      renderHistory();
+      return;
+    }
+
+    const n = Number(page);
+    if (Number.isInteger(n) && n > 0) {
+      currentHistoryPage = n;
+      renderHistory();
+    }
+  });
 
   historyListEl.addEventListener("click", (event) => {
     const target = event.target;
@@ -656,6 +792,7 @@ function initMainEvents() {
   downloadBtn.addEventListener("click", downloadOutput);
   pushCloudBtn.addEventListener("click", pushCloud);
   pullCloudBtn.addEventListener("click", pullCloud);
+  deleteCloudBtn.addEventListener("click", deleteCloudData);
 }
 
 function bootstrap() {
