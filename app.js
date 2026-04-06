@@ -642,7 +642,8 @@ function initFirebase() {
   const app = window.firebase.initializeApp(window.FIREBASE_CONFIG);
   firebaseDb = window.firebase.firestore(app);
   firebaseReady = true;
-  setCloudStatus("ready. No login required. Use sync key to sync devices.");
+  setCloudStatus("ready. Auto loading cloud history...");
+  pullCloud();
 }
 
 function initMainEvents() {
